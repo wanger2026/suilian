@@ -6,6 +6,35 @@
 
 这是从 **0.3.17 测试版**整理的开源开发者版本。仓库提供双端源码、组件补丁、依赖锁定和构建工具；目前没有公开签名的安装包。请先阅读[构建说明](docs/BUILD.md)与[已知限制](docs/LIMITATIONS.md)。
 
+## 界面预览
+
+手机端查看分流状态、应用用量并按需进入远控；电脑端集中管理连接、配对和设备工具。
+
+<table>
+  <tr>
+    <th width="32%">Android · 智能分流</th>
+    <th width="68%">Windows · 设备概览</th>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <a href="docs/images/android-connection.png"><img src="docs/images/android-connection.png" width="280" alt="随连 Android 连接页：智能分流开关与手机直连、电脑通道、电脑出口检查" /></a>
+    </td>
+    <td align="center" valign="top">
+      <a href="docs/images/windows-overview.png"><img src="docs/images/windows-overview.png" width="760" alt="随连 Windows 设备概览：一键准备、配对入口、网络状态与流量统计" /></a>
+      <p>一键准备连接 · 配对入口 · 上传下载统计<br/>后台运行与彻底退出分开控制</p>
+    </td>
+  </tr>
+</table>
+
+<details>
+  <summary>展开电脑端设备工具：日常远控、高帧率串流、USB 准备和 AI 联调</summary>
+  <p><a href="docs/images/windows-tools.png"><img src="docs/images/windows-tools.png" width="960" alt="随连 Windows 设备工具：日常远控、高帧率串流、USB 安装升级、权限检查、无线配对与 AI 真机联调" /></a></p>
+</details>
+
+手机图为测试版的实机连接页；电脑图由当前版本的未连接预览界面生成。已核对图片不含个人 IP、配对二维码、设备标识或访问记录。点击图片可查看原图。[图片来源与更新说明](docs/images/README.md)。
+
+## 连接方式
+
 ```mermaid
 flowchart LR
     A[Android 应用] --> B{手机分流}
@@ -77,4 +106,3 @@ go vet ./...
 随连集成项目采用 [AGPL-3.0](LICENSE)，第三方源码保留各自许可证和版权声明。组件版本、来源及源码获取方式见 [THIRD_PARTY.md](THIRD_PARTY.md)。请勿移除第三方声明；重新分发二进制时应同时满足对应组件的源码和许可证要求。
 
 欢迎提交可复现的技术问题和改进，见 [CONTRIBUTING.md](CONTRIBUTING.md)。报告前请移除二维码、凭据、个人 IP、设备标识与浏览记录。安全问题见 [SECURITY.md](SECURITY.md)。
-
