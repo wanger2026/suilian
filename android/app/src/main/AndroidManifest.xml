@@ -1,0 +1,59 @@
+<?xml version='1.0' encoding='utf-8'?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:ns1="http://schemas.android.com/tools" package="com.carriez.flutter_hbb">
+
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" ns1:node="remove" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" ns1:node="remove" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" ns1:node="remove" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <queries>
+        <package android:name="com.ss.android.ugc.aweme" />
+        <package android:name="com.ss.android.ugc.aweme.lite" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
+    </queries>
+
+    <application android:name="cn.wangchuan.link.LinkApplication" android:icon="@mipmap/suilian_icon" android:label="随连·测试" android:roundIcon="@mipmap/suilian_icon" android:supportsRtl="true" android:allowBackup="false" android:usesCleartextTraffic="true">
+
+        <service android:name=".InputService" android:enabled="true" android:exported="false" android:label="RustDesk Input" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <activity android:name=".MainActivity" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode|navigation" android:exported="false" android:hardwareAccelerated="true" android:launchMode="singleTop" android:theme="@style/LaunchTheme" android:windowSoftInputMode="adjustResize">
+            </activity>
+
+        <activity android:name=".PermissionRequestTransparentActivity" android:excludeFromRecents="true" android:theme="@style/Transparent" />
+
+        <service android:name=".MainService" android:enabled="true" android:exported="false" android:foregroundServiceType="specialUse|mediaProjection|microphone">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="@string/foreground_service_special_use_subtype" />
+        </service>
+
+        <service android:name=".FloatingWindowService" android:enabled="true" />
+
+        
+        <receiver android:name="cn.wangchuan.link.StreamPairReceiver" android:exported="false"><intent-filter><action android:name="cn.wangchuan.link.PAIR_STREAM" /></intent-filter></receiver>
+        <meta-data android:name="flutterEmbedding" android:value="2" />
+    <activity android:name="cn.wangchuan.link.HomeActivity" android:exported="true" android:theme="@android:style/Theme.Material.Light.NoActionBar"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity><service android:name="cn.wangchuan.link.LinkVpnService" android:permission="android.permission.BIND_VPN_SERVICE" android:exported="true" android:foregroundServiceType="specialUse"><intent-filter><action android:name="android.net.VpnService" /></intent-filter><property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User enabled persistent split VPN to a paired personal computer" /><meta-data android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON" android:value="true" /></service><activity android:name="cn.wangchuan.link.RuleSettingsActivity" android:exported="false" android:theme="@android:style/Theme.Material.Light.NoActionBar" /><service android:name="cn.wangchuan.link.DevelopmentService" android:exported="false" android:foregroundServiceType="specialUse"><property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User consented ADB relay restricted to an active authenticated remote desktop session" /></service><activity android:name="cn.wangchuan.link.TrafficHistoryActivity" android:exported="false" android:theme="@android:style/Theme.Material.Light.NoActionBar" /></application>
+
+</manifest>

@@ -1,0 +1,376 @@
+--- a/adapter/outbound/easytier.go
++++ b/adapter/outbound/easytier.go
+@@ -35,6 +35,7 @@
+ var errEasyTierClosed = errors.New("easytier outbound closed")
+ 
+ type EasyTier struct {
++ recentEvents []map[string]any
+ 	*Base
+ 	option     EasyTierOption
+ 	configTOML string
+@@ -54,6 +55,7 @@
+ }
+ 
+ type EasyTierOption struct {
++	InterfaceAddresses []string `proxy:"interface-addresses,omitempty"`
+ 	BasicOption
+ 	Name                string   `proxy:"name"`
+ 	NetworkName         string   `proxy:"network-name,omitempty"`
+@@ -290,8 +292,11 @@
+ 	if instanceName == "" {
+ 		instanceName = e.option.Name
+ 	}
++	e.mu.Lock()
++	physicalAddresses := append([]string(nil), e.option.InterfaceAddresses...)
++	e.mu.Unlock()
+ 	host, err := corehost.New(e.ctx, corehost.Options{
+-		Platform: easytier.Services(e.dialer),
++		Platform: easytier.ServicesWithAddresses(e.dialer, physicalAddresses),
+ 	})
+ 	if err != nil {
+ 		return err
+@@ -314,6 +319,7 @@
+ 	if err := instance.Start(e.ctx); err != nil {
+ 		return err
+ 	}
++	go easytier.DrainUnhandledPackets(e.ctx, instance)
+ 	log.Infoln("[EasyTier](%s) instance %s running", e.Name(), instance.ID())
+ 	return nil
+ }
+@@ -352,6 +358,7 @@
+ 			if !ok {
+ 				return "instance stopped"
+ 			}
++			e.recordNetworkEvent(event.Kind)
+ 			switch event.Kind {
+ 			case "peer_added", "peer_removed":
+ 				log.Infoln("[EasyTier](%s) %s: %s", e.Name(), event.Kind, event.Message)
+--- /dev/null
++++ b/adapter/outbound/wangchuan_overlay_status.go
+@@ -0,0 +1,64 @@
++//go:build !no_easytier
++
++package outbound
++
++import (
++ "context"
++ "encoding/json"
++ "errors"
++ "time"
++)
++
++func (p *autoCloseProxyAdapter) OverlayStatus(ctx context.Context) (map[string]any,error) {
++ getter,ok:=p.ProxyAdapter.(interface{OverlayStatus(context.Context)(map[string]any,error)})
++ if !ok{return nil,errors.New("not an overlay adapter")}
++ return getter.OverlayStatus(ctx)
++}
++
++// OverlayStatus exports an explicit allowlist, never identity/configuration keys.
++func (e *EasyTier) OverlayStatus(ctx context.Context) (map[string]any, error) {
++ i,err:=e.currentInstance();if err!=nil{return nil,err}
++ peers,err:=i.ListPeer(ctx);if err!=nil{return nil,err}
++ routes,err:=i.ListRoute(ctx);if err!=nil{return nil,err}
++ result:=map[string]any{"peerCount":len(peers),"routeCount":len(routes)}
++ e.mu.Lock();result["events"]=append([]map[string]any(nil),e.recentEvents...);e.mu.Unlock()
++ if node,nodeErr:=i.ShowNodeInfo(ctx);nodeErr==nil {
++  raw,_:=json.Marshal(node);var m map[string]any;json.Unmarshal(raw,&m)
++  result["stun"]=m["stun_info"]
++ }
++ safePeers:=[]any{};safeRoutes:=[]any{}
++ for n,p:=range peers {
++  if n>=32{break};raw,_:=json.Marshal(p);var m map[string]any;json.Unmarshal(raw,&m)
++  entry:=map[string]any{"peerId":m["peer_id"]};conns:=[]any{}
++  if all,ok:=m["conns"].([]any);ok {for _,c:=range all {v,ok:=c.(map[string]any);if !ok{continue};conns=append(conns,map[string]any{"stats":v["stats"],"isClient":v["is_client"],"closed":v["is_closed"]})}}
++  entry["connections"]=conns;safePeers=append(safePeers,entry)
++ }
++ for n,r:=range routes {
++  if n>=64{break};raw,_:=json.Marshal(r);var m map[string]any;json.Unmarshal(raw,&m)
++  safeRoutes=append(safeRoutes,map[string]any{"peerId":m["peer_id"],"ipv4":m["ipv4_addr"],"nextHop":m["next_hop_peer_id"],"cost":m["cost"]})
++ }
++ result["peers"]=safePeers;result["routes"]=safeRoutes
++ return result,nil
++}
++
++func (e *EasyTier) recordNetworkEvent(kind string) {
++ e.mu.Lock();defer e.mu.Unlock()
++ e.recentEvents=append(e.recentEvents,map[string]any{"time":time.Now().UnixMilli(),"kind":kind})
++ if len(e.recentEvents)>60 {e.recentEvents=e.recentEvents[len(e.recentEvents)-60:]}
++}
++
++func (p *autoCloseProxyAdapter) RefreshPhysicalNetwork(ctx context.Context, addresses []string) error {
++ setter,ok:=p.ProxyAdapter.(interface{RefreshPhysicalNetwork(context.Context,[]string)error})
++ if !ok{return errors.New("not an overlay adapter")};return setter.RefreshPhysicalNetwork(ctx,addresses)
++}
++func (e *EasyTier) RefreshPhysicalNetwork(ctx context.Context, addresses []string) error {
++ if len(addresses)>32{return errors.New("too many addresses")}
++ e.mu.Lock()
++ e.option.InterfaceAddresses=append([]string(nil),addresses...)
++ instance:=e.instance
++ e.mu.Unlock()
++ // Close this instance (Stop leaves its event stream open); its existing loop closes the old host and creates
++ // a fresh snapshot and STUN state. Android's TUN and direct rules stay alive.
++ if instance!=nil{return instance.Close(ctx)}
++ return nil
++}
+--- /dev/null
++++ b/adapter/outbound/wangchuan_refresh_test.go
+@@ -0,0 +1,26 @@
++//go:build !no_easytier
++package outbound
++import (
++ "context"
++ "testing"
++ "time"
++ "github.com/metacubex/mihomo/component/dialer"
++ "github.com/metacubex/mihomo/component/easytier"
++)
++func TestPhysicalNetworkRefreshRecreatesInstance(t *testing.T){
++ ctx,cancel:=context.WithTimeout(context.Background(),12*time.Second);defer cancel()
++ noListener,encrypted:=true,true
++ option:=EasyTierOption{Name:"refresh-test",NetworkName:"isolated-refresh",NetworkSecret:"synthetic-test-secret-not-a-real-credential",IPv4:"10.179.0.2/24",Peers:[]string{"tcp://127.0.0.1:9"},NoListener:&noListener,EnableEncryption:&encrypted}
++ config,err:=option.structuredConfig().RenderTOML();if err!=nil{t.Fatal(err)}
++ e:=&EasyTier{Base:&Base{name:option.Name,dialer:dialer.NewDialer()},option:option,configTOML:easytier.ApplyRequiredFlags(config),stateDir:t.TempDir(),ctx:ctx,cancel:cancel}
++ defer e.Close()
++ if err=e.ensureStarted(ctx);err!=nil{t.Fatal(err)}
++ before,err:=e.currentInstance();if err!=nil{t.Fatal(err)}
++ if err=e.RefreshPhysicalNetwork(ctx,[]string{"192.168.100.20"});err!=nil{t.Fatal(err)}
++ deadline:=time.After(8*time.Second)
++ for{
++  after,_:=e.currentInstance()
++  if after!=nil&&after!=before {if err=e.ensureStarted(ctx);err!=nil{t.Fatal(err)};return}
++  select {case <-deadline:t.Fatal("network refresh did not recreate instance; stopped event stream may still be open");case <-time.After(30*time.Millisecond):}
++ }
++}
+--- /dev/null
++++ b/component/easytier/packet_drain.go
+@@ -0,0 +1,20 @@
++package easytier
++
++import "context"
++
++type packetReceiver interface {
++    ReceivePacket(context.Context) ([]byte, error)
++}
++
++// DrainUnhandledPackets is required when using only Dial/ListenPacket instead
++// of a raw TUN. Late TCP packets and unmatched traffic still enter the host's
++// bounded raw packet sink. Leaving that sink unread backpressures the peer's
++// entire receive loop, including liveness and otherwise healthy connections.
++// These packets have no consumer in this outbound adapter and must not be
++// forwarded to Android's TUN or another network. ReceivePacket blocks when idle
++// and returns on instance shutdown; this worker owns no timer or polling loop.
++func DrainUnhandledPackets(ctx context.Context, receiver packetReceiver) {
++    for {
++        if _, err := receiver.ReceivePacket(ctx); err != nil { return }
++    }
++}
+--- /dev/null
++++ b/component/easytier/physical_snapshot.go
+@@ -0,0 +1,27 @@
++package easytier
++
++import (
++ "net/netip"
++ "github.com/easytier/easytier/easytier-go/platform"
++ C "github.com/metacubex/mihomo/constant"
++)
++
++// Android supplies physical LinkProperties because Go's interface enumeration
++// is restricted on modern Android. Never advertise the VPN's virtual addresses.
++func PhysicalSnapshot(addresses []string) platform.EnvironmentSnapshot {
++ s:=platform.EnvironmentSnapshot{}
++ seen:=map[netip.Addr]bool{}
++ overlay:=netip.MustParsePrefix("10.144.77.0/24")
++ tun:=netip.MustParsePrefix("172.19.0.0/30")
++ for _,v:=range addresses {
++  a,e:=netip.ParseAddr(v);if e!=nil{continue};a=a.Unmap()
++  if !a.IsGlobalUnicast()||a.IsLoopback()||a.IsLinkLocalUnicast()||a.Zone()!=""||overlay.Contains(a)||tun.Contains(a)||seen[a]{continue}
++  seen[a]=true;s.LocalIPs=append(s.LocalIPs,a)
++  if a.Is4(){s.InterfaceIPv4s=append(s.InterfaceIPv4s,a)}else{s.InterfaceIPv6s=append(s.InterfaceIPv6s,a);if !a.IsPrivate()&&s.PublicIPv6==nil {value:=a;s.PublicIPv6=&value}}
++  if len(seen)>=32{break}
++ }
++ return s
++}
++func ServicesWithAddresses(d C.Dialer,addresses []string)platform.Services {
++ s:=Services(d);s.Snapshot=PhysicalSnapshot(addresses);return s
++}
+--- /dev/null
++++ b/component/easytier/physical_snapshot_test.go
+@@ -0,0 +1,9 @@
++package easytier
++import "testing"
++func TestPhysicalSnapshotExcludesTunAndUnsafeAddresses(t *testing.T){
++ s:=PhysicalSnapshot([]string{"192.0.2.111","192.0.2.111","10.144.77.2","172.19.0.1","127.0.0.1","0.0.0.0","ff02::1","fe80::1","bad","2409:1234::1"})
++ if len(s.LocalIPs)!=2||len(s.InterfaceIPv4s)!=1||len(s.InterfaceIPv6s)!=1||s.PublicIPv6==nil{t.Fatalf("unexpected snapshot: %+v",s)}
++}
++func TestPhysicalSnapshotBoundsAndPrivateIPv6(t *testing.T){
++ s:=PhysicalSnapshot([]string{"fdab::1"});if s.PublicIPv6!=nil||len(s.InterfaceIPv6s)!=1{t.Fatal("private IPv6 presented as public")}
++}
+--- a/component/easytier/toml.go
++++ b/component/easytier/toml.go
+@@ -252,6 +252,7 @@
+ func requiredFlags() []requiredFlag {
+ 	return []requiredFlag{
+ 		{key: "no_tun", value: "true"},
++		{key: "p2p_only", value: "true"},
+ 		{key: "bind_device", value: "false"},
+ 	}
+ }
+--- /dev/null
++++ b/component/easytier/wangchuan_direct_test.go
+@@ -0,0 +1,155 @@
++package easytier
++
++import (
++	"context"
++	"fmt"
++	"net"
++	"strings"
++	"testing"
++	"time"
++
++	host "github.com/easytier/easytier/easytier-go"
++)
++
++func TestWangChuanMandatoryDirectFlag(t *testing.T) {
++	for _, input := range []string{"", "[flags]\np2p_only = false\n", "[flags]\np2p_only = true\n"} {
++		actual := ApplyRequiredFlags(input)
++		if strings.Count(actual, "p2p_only = true") != 1 || strings.Contains(actual, "p2p_only = false") {
++			t.Fatal("direct-only flag could be bypassed")
++		}
++	}
++}
++
++// The relay control proves the route works before testing a fail-closed client.
++func TestWangChuanActualCoreBlocksRelayButAllowsDirect(t *testing.T) {
++	for _, tc := range []struct {
++		name                 string
++		strict, direct, want bool
++	}{
++		{"relay-control", false, false, true},
++		{"relay-blocked", true, false, false},
++		{"direct-allowed", true, true, true},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
++			defer cancel()
++			engine, err := host.New(ctx, host.Options{})
++			if err != nil {
++				t.Fatal(err)
++			}
++			defer engine.Close(context.Background())
++			reserve := func() int {
++				l, e := net.Listen("tcp4", "127.0.0.1:0")
++				if e != nil {
++					t.Fatal(e)
++				}
++				p := l.Addr().(*net.TCPAddr).Port
++				l.Close()
++				return p
++			}
++			relayPort, serverPort := reserve(), reserve()
++			makeNode := func(name, ip string, port, peer int, strict bool) *host.Instance {
++				listeners := "[]"
++				if port != 0 {
++					listeners = fmt.Sprintf("[\"tcp://127.0.0.1:%d\"]", port)
++				}
++				config := fmt.Sprintf("ipv4 = %q\nlisteners = %s\nstun_servers = []\nstun_servers_v6 = []\n[network_identity]\nnetwork_name = %q\nnetwork_secret = \"non-secret-isolated-test-fixture\"\n", ip, listeners, "wangchuan-core-test-"+tc.name)
++				if peer != 0 {
++					config += fmt.Sprintf("[[peer]]\nuri = \"tcp://127.0.0.1:%d\"\n", peer)
++				}
++				config += fmt.Sprintf("[flags]\nno_tun = true\nbind_device = false\ndisable_p2p = true\np2p_only = %t\n", strict)
++				node, e := engine.CreateInstanceTOML(ctx, name, "", config)
++				if e != nil {
++					t.Fatal(e)
++				}
++				if e = node.Start(ctx); e != nil {
++					t.Fatal(e)
++				}
++				return node
++			}
++			relay := makeNode("relay", "10.244.71.3", relayPort, 0, false)
++			defer relay.Close(context.Background())
++			serverPeer, clientPeer := relayPort, relayPort
++			if tc.direct {
++				serverPeer, clientPeer = 0, serverPort
++			}
++			server := makeNode("server", "10.244.71.1", serverPort, serverPeer, tc.strict)
++			defer server.Close(context.Background())
++			client := makeNode("client", "10.244.71.2", 0, clientPeer, tc.strict)
++			defer client.Close(context.Background())
++			var receive, send net.PacketConn
++			until := time.Now().Add(8 * time.Second)
++			for time.Now().Before(until) {
++				if receive == nil {
++					receive, _ = server.ListenPacket("udp4", ":38124")
++				}
++				if send == nil {
++					send, _ = client.ListenPacket("udp4", ":38125")
++				}
++				if receive != nil && send != nil {
++					break
++				}
++				time.Sleep(50 * time.Millisecond)
++			}
++			if receive == nil || send == nil {
++				t.Fatal("core data plane did not start")
++			}
++			defer receive.Close()
++			defer send.Close()
++			target := &net.UDPAddr{IP: net.ParseIP("10.244.71.1"), Port: 38124}
++			source := &net.UDPAddr{IP: net.ParseIP("10.244.71.2"), Port: 38125}
++			payload := []byte("wangchuan-direct-policy-proof")
++			observed := false
++			until = time.Now().Add(8 * time.Second)
++			for time.Now().Before(until) {
++				receive.WriteTo([]byte("warmup"), source)
++				send.WriteTo(payload, target)
++				receive.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
++				buf := make([]byte, 128)
++				n, from, e := receive.ReadFrom(buf)
++				if e == nil && string(buf[:n]) == string(payload) {
++					observed = true
++					if !tc.want {
++						t.Fatal("business payload reached peer through relay")
++					}
++					if tc.direct {
++						receive.WriteTo(payload, from)
++						send.SetReadDeadline(time.Now().Add(time.Second))
++						for {
++							n, _, e = send.ReadFrom(buf)
++							if e != nil || string(buf[:n]) != "warmup" {
++								break
++							}
++						}
++						if e != nil || string(buf[:n]) != string(payload) {
++							t.Fatal("return path failed", e)
++						}
++					}
++					break
++				}
++			}
++			if !tc.want {
++				routes, e := client.ListRoute(ctx)
++				if e != nil {
++					t.Fatal(e)
++				}
++				found := false
++				for _, route := range routes {
++					if route.GetIpv4Addr().GetAddress().GetAddr() == 183781121 && route.GetCost() >= 2 {
++						found = true
++					}
++				}
++				if !found {
++					t.Fatal("negative test lacked a discovered relay route")
++				}
++			}
++			if observed != tc.want {
++				info, _ := client.ShowNodeInfo(ctx)
++				peers, _ := client.ListPeer(ctx)
++				routes, _ := client.ListRoute(ctx)
++				t.Logf("node=%v peers=%v routes=%v", info, peers, routes)
++				t.Fatalf("payload observed=%t, want=%t", observed, tc.want)
++			}
++		})
++	}
++}

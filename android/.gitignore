@@ -1,0 +1,5 @@
+/.gradle/
+/local.properties
+key.properties
+/plugins.local.json
+GeneratedPluginRegistrant.java

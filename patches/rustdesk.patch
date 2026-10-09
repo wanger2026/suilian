@@ -1,0 +1,615 @@
+diff --git a/flutter/lib/common/widgets/gestures.dart b/flutter/lib/common/widgets/gestures.dart
+index 0501ca4..6d255bd 100644
+--- a/flutter/lib/common/widgets/gestures.dart
++++ b/flutter/lib/common/widgets/gestures.dart
+@@ -506,6 +506,10 @@ class DoubleFinerTapGestureRecognizer extends GestureRecognizer {
+   @override
+   void addAllowedPointer(PointerDownEvent event) {
+     debugPrint("addAllowedPointer");
++    // Separate taps are left/double clicks, never a two-finger right click.
++    if (_isStart && _upTap.isNotEmpty) {
++      _reset();
++    }
+     if (_isStart) {
+       // second
+       if (onDoubleFinerTapDown != null) {
+@@ -594,6 +598,8 @@ class DoubleFinerTapGestureRecognizer extends GestureRecognizer {
+ 
+   void _reset() {
+     _stopFirstTapUpTimer();
++    _isStart = false;
++    _upTap.clear();
+     _firstTap = null;
+     _clearTrackers();
+   }
+@@ -611,6 +617,7 @@ class DoubleFinerTapGestureRecognizer extends GestureRecognizer {
+ 
+   void _freezeTracker(_TapTracker tracker) {
+     tracker.stopTrackingPointer(_handleEvent);
++    GestureBinding.instance.gestureArena.release(tracker.pointer);
+   }
+ 
+   void _startFirstTapDownTimer() {
+diff --git a/flutter/lib/common/widgets/remote_input.dart b/flutter/lib/common/widgets/remote_input.dart
+index 1e2daac..73940ee 100644
+--- a/flutter/lib/common/widgets/remote_input.dart
++++ b/flutter/lib/common/widgets/remote_input.dart
+@@ -12,6 +12,7 @@ import 'package:flutter_hbb/models/model.dart';
+ import 'package:flutter_hbb/models/input_model.dart';
+ 
+ import './gestures.dart';
++import 'package:flutter_hbb/mobile/wangchuan_development.dart';
+ 
+ class RawKeyFocusScope extends StatelessWidget {
+   final FocusNode? focusNode;
+@@ -138,6 +139,7 @@ class _RawTouchGestureDetectorRegionState
+   }
+ 
+   onTapDown(TapDownDetails d) async {
++    WangChuanDevelopment.gesture('tapDown', value: handleTouch);
+     lastDeviceKind = d.kind;
+     _lastTapDownGlobalPosition = d.globalPosition;
+     if (isNotTouchBasedDevice()) {
+@@ -153,6 +155,7 @@ class _RawTouchGestureDetectorRegionState
+   }
+ 
+   onTapUp(TapUpDetails d) async {
++    WangChuanDevelopment.gesture('tapUp', value: isNotTouchBasedDevice());
+     final TapDownDetails? lastTapDownDetails = _lastTapDownDetails;
+     _lastTapDownDetails = null;
+     if (isNotTouchBasedDevice()) {
+@@ -165,6 +168,7 @@ class _RawTouchGestureDetectorRegionState
+     if (handleTouch) {
+       final isMoved =
+           await ffi.cursorModel.move(d.localPosition.dx, d.localPosition.dy);
++      WangChuanDevelopment.gesture('cursorMove', value: isMoved);
+       if (isMoved) {
+         // If pan already handled 'down', don't send it again.
+         if (lastTapDownDetails != null && !_touchModePanStarted) {
+@@ -176,6 +180,7 @@ class _RawTouchGestureDetectorRegionState
+   }
+ 
+   onTap() async {
++    WangChuanDevelopment.gesture('tap', value: shouldBlockMouseModeEvent());
+     if (isNotTouchBasedDevice()) {
+       return;
+     }
+@@ -557,8 +562,9 @@ class _RawTouchGestureDetectorRegionState
+           ..onLongPress = onLongPress
+           ..onLongPressMoveUpdate = onLongPressMoveUpdate;
+       }),
+-      // Customized
+-      HoldTapMoveGestureRecognizer:
++      // Mouse-mode hold/right-click recognizers must not hold touch-mode taps.
++      // Touch mode already handles dragging and long-press right click above.
++      if (!handleTouch) HoldTapMoveGestureRecognizer:
+           GestureRecognizerFactoryWithHandlers<HoldTapMoveGestureRecognizer>(
+               () => HoldTapMoveGestureRecognizer(),
+               (instance) => instance
+@@ -566,7 +572,7 @@ class _RawTouchGestureDetectorRegionState
+                 ..onHoldDragUpdate = onHoldDragUpdate
+                 ..onHoldDragCancel = onHoldDragCancel
+                 ..onHoldDragEnd = onHoldDragEnd),
+-      DoubleFinerTapGestureRecognizer:
++      if (!handleTouch) DoubleFinerTapGestureRecognizer:
+           GestureRecognizerFactoryWithHandlers<DoubleFinerTapGestureRecognizer>(
+               () => DoubleFinerTapGestureRecognizer(), (instance) {
+         instance
+diff --git a/flutter/lib/mobile/pages/remote_page.dart b/flutter/lib/mobile/pages/remote_page.dart
+index edcfe2b..96d5229 100644
+--- a/flutter/lib/mobile/pages/remote_page.dart
++++ b/flutter/lib/mobile/pages/remote_page.dart
+@@ -1,4 +1,5 @@
+ import 'dart:async';
++import '../wangchuan_development.dart';
+ 
+ import 'package:flutter/material.dart';
+ import 'package:flutter/services.dart';
+@@ -93,13 +94,9 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
+   @override
+   void initState() {
+     super.initState();
++    WangChuanDevelopment.open(widget.id);
+     gFFI.ffiModel.updateEventListener(sessionId, widget.id);
+-    gFFI.start(
+-      widget.id,
+-      password: widget.password,
+-      isSharedPassword: widget.isSharedPassword,
+-      forceRelay: widget.forceRelay,
+-    );
++    unawaited(_startWithPairedPassword());
+     WidgetsBinding.instance.addPostFrameCallback((_) {
+       SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: []);
+       gFFI.dialogManager
+@@ -140,8 +137,17 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
+     }
+   }
+ 
++  Future<void> _startWithPairedPassword() async {
++    final password = (widget.password?.isNotEmpty ?? false)
++        ? widget.password
++        : await WangChuanDevelopment.pairedPassword(widget.id);
++    if (!mounted) return;
++    gFFI.start(widget.id, password: password, isSharedPassword: widget.isSharedPassword, forceRelay: widget.forceRelay);
++  }
++
+   @override
+   Future<void> dispose() async {
++    WangChuanDevelopment.close();
+     WidgetsBinding.instance.removeObserver(this);
+     // Close the session up-front. `gFFI.close()` below only calls `sessionClose`
+     // after several awaits (canvas save, image update, the `enable_soft_keyboard`
+diff --git a/flutter/lib/models/input_model.dart b/flutter/lib/models/input_model.dart
+index 6ea23c2..8ea0148 100644
+--- a/flutter/lib/models/input_model.dart
++++ b/flutter/lib/models/input_model.dart
+@@ -19,6 +19,7 @@ import '../../models/state_model.dart';
+ import 'input_modifier_utils.dart';
+ import 'relative_mouse_model.dart';
+ import '../common.dart';
++import '../mobile/wangchuan_development.dart';
+ import '../consts.dart';
+ 
+ /// Mouse button enum.
+@@ -1027,6 +1028,7 @@ class InputModel {
+   /// [down] indicates the key's state(down or up).
+   /// [press] indicates a click event(down and up).
+   void inputKey(String name, {bool? down, bool? press}) {
++    WangChuanDevelopment.inputAttempt('key', keyboardPerm, isViewCamera, sessionId == parent.target?.sessionId);
+     if (!keyboardPerm) return;
+     if (isViewCamera) return;
+     bind.sessionInputKey(
+@@ -1130,6 +1132,7 @@ class InputModel {
+ 
+   /// Send mouse press event.
+   Future<void> sendMouse(String type, MouseButtons button) async {
++    WangChuanDevelopment.inputAttempt('mouse', keyboardPerm, isViewCamera, sessionId == parent.target?.sessionId);
+     if (!keyboardPerm) return;
+     if (isViewCamera) return;
+     await _sendMouseUnchecked(type, button);
+diff --git a/flutter/lib/models/model.dart b/flutter/lib/models/model.dart
+index f1abb8e..8a73437 100644
+--- a/flutter/lib/models/model.dart
++++ b/flutter/lib/models/model.dart
+@@ -1,4 +1,5 @@
+ import 'dart:async';
++import '../mobile/wangchuan_development.dart';
+ import 'dart:convert';
+ import 'dart:math';
+ import 'dart:typed_data';
+@@ -337,6 +338,7 @@ class FfiModel with ChangeNotifier {
+       } else if (name == 'set_multiple_windows_session') {
+         handleMultipleWindowsSession(evt, sessionId, peerId);
+       } else if (name == 'peer_info') {
++        WangChuanDevelopment.authenticated(peerId);
+         handlePeerInfo(evt, peerId, false);
+       } else if (name == 'sync_peer_info') {
+         handleSyncPeerInfo(evt, sessionId, peerId);
+@@ -886,6 +888,10 @@ class FfiModel with ChangeNotifier {
+     final title = evt['title'];
+     final text = evt['text'];
+     final link = evt['link'];
++    if (title == 'Connection Error' || type == 'error' ||
++        type == 'restarting' || type == 'restarting-show') {
++      WangChuanDevelopment.disconnected(peerId);
++    }
+ 
+     // The peer-gone detector reconnects under `restarting-show` rather than an error title, so
+     // it needs naming here too. By its own title, not the type: an explicitly restarted remote
+diff --git a/flutter/pubspec.lock b/flutter/pubspec.lock
+index acfd62a..4130a49 100644
+--- a/flutter/pubspec.lock
++++ b/flutter/pubspec.lock
+@@ -58,10 +58,10 @@ packages:
+     dependency: transitive
+     description:
+       name: async
+-      sha256: "758e6d74e971c3e5aceb4110bfd6698efc7f501675bcfe0c775459a8140750eb"
++      sha256: "947bfcf187f74dbc5e146c9eb9c0f10c9f8b30743e341481c1e2ed3ecc18c20c"
+       url: "https://pub.dev"
+     source: hosted
+-    version: "2.13.0"
++    version: "2.11.0"
+   auto_size_text:
+     dependency: "direct main"
+     description:
+@@ -90,10 +90,10 @@ packages:
+     dependency: transitive
+     description:
+       name: boolean_selector
+-      sha256: "8aab1771e1243a5063b8b0ff68042d67334e3feab9e95b9490f9a6ebf73b42ea"
++      sha256: "6cfb5af12253eaf2b368f07bacc5a80d1301a071c73360d746b7f2e32d762c66"
+       url: "https://pub.dev"
+     source: hosted
+-    version: "2.1.2"
++    version: "2.1.1"
+   bot_toast:
+     dependency: "direct main"
+     description:
+@@ -339,8 +339,8 @@ packages:
+     dependency: "direct main"
+     description:
+       path: "."
+-      ref: "cddc2e64f8fefce4f80db87b20bcda2dd019bed6"
+-      resolved-ref: "cddc2e64f8fefce4f80db87b20bcda2dd019bed6"
++      ref: cddc2e64f8fefce4f80db87b20bcda2dd019bed6
++      resolved-ref: cddc2e64f8fefce4f80db87b20bcda2dd019bed6
+       url: "https://github.com/rustdesk-org/rustdesk_desktop_multi_window"
+     source: git
+     version: "0.1.0"
+@@ -409,6 +409,14 @@ packages:
+       url: "https://pub.dev"
+     source: hosted
+     version: "12.0.1"
++  fake_async:
++    dependency: transitive
++    description:
++      name: fake_async
++      sha256: "511392330127add0b769b75a987850d136345d9227c6b94c96a04cf4a391bf78"
++      url: "https://pub.dev"
++    source: hosted
++    version: "1.3.1"
+   ffi:
+     dependency: "direct main"
+     description:
+@@ -637,6 +645,11 @@ packages:
+       url: "https://pub.dev"
+     source: hosted
+     version: "2.1.0"
++  flutter_test:
++    dependency: "direct dev"
++    description: flutter
++    source: sdk
++    version: "0.0.0"
+   flutter_web_plugins:
+     dependency: transitive
+     description: flutter
+@@ -842,6 +855,30 @@ packages:
+       url: "https://pub.dev"
+     source: hosted
+     version: "4.9.0"
++  leak_tracker:
++    dependency: transitive
++    description:
++      name: leak_tracker
++      sha256: "3f87a60e8c63aecc975dda1ceedbc8f24de75f09e4856ea27daf8958f2f0ce05"
++      url: "https://pub.dev"
++    source: hosted
++    version: "10.0.5"
++  leak_tracker_flutter_testing:
++    dependency: transitive
++    description:
++      name: leak_tracker_flutter_testing
++      sha256: "932549fb305594d82d7183ecd9fa93463e9914e1b67cacc34bc40906594a1806"
++      url: "https://pub.dev"
++    source: hosted
++    version: "3.0.5"
++  leak_tracker_testing:
++    dependency: transitive
++    description:
++      name: leak_tracker_testing
++      sha256: "6ba465d5d76e67ddf503e1161d1f4a6bc42306f9d66ca1e8f079a47290fb06d3"
++      url: "https://pub.dev"
++    source: hosted
++    version: "3.0.1"
+   lints:
+     dependency: transitive
+     description:
+@@ -870,10 +907,10 @@ packages:
+     dependency: transitive
+     description:
+       name: matcher
+-      sha256: dc58c723c3c24bf8d3e2d3ad3f2f9d7bd9cf43ec6feaa64181775e60190153f2
++      sha256: d2323aa2060500f906aa31a895b4030b6da3ebdcc5619d14ce1aada65cd161cb
+       url: "https://pub.dev"
+     source: hosted
+-    version: "0.12.17"
++    version: "0.12.16+1"
+   material_color_utilities:
+     dependency: transitive
+     description:
+@@ -1211,10 +1248,10 @@ packages:
+     dependency: transitive
+     description:
+       name: source_span
+-      sha256: "254ee5351d6cb365c859e20ee823c3bb479bf4a293c22d17a9f1bf144ce86f7c"
++      sha256: "53e943d4206a5e30df338fd4c6e7a077e02254531b138a15aec3bd143c1a8b3c"
+       url: "https://pub.dev"
+     source: hosted
+-    version: "1.10.1"
++    version: "1.10.0"
+   sqflite:
+     dependency: "direct main"
+     description:
+@@ -1235,18 +1272,18 @@ packages:
+     dependency: transitive
+     description:
+       name: stack_trace
+-      sha256: "8b27215b45d22309b5cddda1aa2b19bdfec9df0e765f2de506401c071d38d1b1"
++      sha256: "73713990125a6d93122541237550ee3352a2d84baad52d375a4cad2eb9b7ce0b"
+       url: "https://pub.dev"
+     source: hosted
+-    version: "1.12.1"
++    version: "1.11.1"
+   stream_channel:
+     dependency: transitive
+     description:
+       name: stream_channel
+-      sha256: "969e04c80b8bcdf826f8f16579c7b14d780458bd97f56d107d3950fdbeef059d"
++      sha256: ba2aa5d8cc609d96bbb2899c28934f9e1af5cddbd60a827822ea467161eb54e7
+       url: "https://pub.dev"
+     source: hosted
+-    version: "2.1.4"
++    version: "2.1.2"
+   stream_transform:
+     dependency: transitive
+     description:
+@@ -1259,10 +1296,10 @@ packages:
+     dependency: transitive
+     description:
+       name: string_scanner
+-      sha256: "921cd31725b72fe181906c6a94d987c78e3b98c2e205b397ea399d4054872b43"
++      sha256: "556692adab6cfa87322a115640c11f13cb77b3f076ddcc5d6ae3c20242bedcde"
+       url: "https://pub.dev"
+     source: hosted
+-    version: "1.4.1"
++    version: "1.2.0"
+   synchronized:
+     dependency: transitive
+     description:
+@@ -1275,18 +1312,18 @@ packages:
+     dependency: transitive
+     description:
+       name: term_glyph
+-      sha256: "7f554798625ea768a7518313e58f83891c7f5024f88e46e7182a4558850a4b8e"
++      sha256: a29248a84fbb7c79282b40b8c72a1209db169a2e0542bce341da992fe1bc7e84
+       url: "https://pub.dev"
+     source: hosted
+-    version: "1.2.2"
++    version: "1.2.1"
+   test_api:
+     dependency: transitive
+     description:
+       name: test_api
+-      sha256: "522f00f556e73044315fa4585ec3270f1808a4b186c936e612cab0b565ff1e00"
++      sha256: "5b8a98dafc4d5c4c9c72d8b31ab2b23fc13422348d2997120294d3bac86b4ddb"
+       url: "https://pub.dev"
+     source: hosted
+-    version: "0.7.6"
++    version: "0.7.2"
+   texture_rgba_renderer:
+     dependency: "direct main"
+     description:
+@@ -1466,7 +1503,7 @@ packages:
+     source: hosted
+     version: "1.1.16"
+   vector_math:
+-    dependency: transitive
++    dependency: "direct main"
+     description:
+       name: vector_math
+       sha256: "80b3257d1492ce4d091729e3a67a60407d227c27241d6927be0130c98e741803"
+@@ -1521,6 +1558,14 @@ packages:
+       url: "https://pub.dev"
+     source: hosted
+     version: "0.4.0+2"
++  vm_service:
++    dependency: transitive
++    description:
++      name: vm_service
++      sha256: "5c5f338a667b4c644744b661f309fb8080bb94b18a7e91ef1dbd343bed00ed6d"
++      url: "https://pub.dev"
++    source: hosted
++    version: "14.2.5"
+   wakelock_plus:
+     dependency: "direct main"
+     description:
+--- /dev/null
++++ b/flutter/lib/mobile/wangchuan_development.dart
+@@ -0,0 +1,79 @@
++import 'dart:async';
++import 'package:flutter/services.dart';
++
++// Only a remote page with authenticated peer information can authorize the
++// native development bridge. Opening the RustDesk home page grants nothing.
++class WangChuanDevelopment {
++  static const _channel = MethodChannel('wangchuan/development');
++  static String? _peer;
++  static bool _authenticated = false;
++  static Timer? _heartbeat;
++  static int _mouseAttempts = 0;
++  static int _keyAttempts = 0;
++  static Map<String, Object> _inputState = {};
++  static Map<String, Object> _gestureState = {};
++
++  static void gesture(String stage, {bool? value}) {
++    if (_peer == null) return;
++    _gestureState[stage] = (_gestureState[stage] as int? ?? 0) + 1;
++    if (value != null) _gestureState['${stage}Result'] = value;
++  }
++
++  // Counts and permission flags only: never key names, text or coordinates.
++  static void inputAttempt(String kind, bool permitted, bool camera, bool sessionMatches) {
++    if (_peer == null) return;
++    if (kind == 'mouse') _mouseAttempts++; else _keyAttempts++;
++    _inputState = {'mouseAttempts': _mouseAttempts, 'keyAttempts': _keyAttempts,
++      'permitted': permitted, 'camera': camera, 'sessionMatches': sessionMatches};
++  }
++
++  static Future<String?> pairedPassword(String peer) async {
++    try {
++      return await _channel.invokeMethod<String>('pairedRemotePassword', {'peer': peer});
++    } on MissingPluginException {
++      return null;
++    } on PlatformException {
++      return null;
++    }
++  }
++
++  static void open(String peer) {
++    close();
++    _mouseAttempts = 0; _keyAttempts = 0; _inputState = {}; _gestureState = {};
++    _peer = peer;
++  }
++
++  static void authenticated(String peer) {
++    if (_peer != peer) return;
++    _authenticated = true;
++    _send();
++    _heartbeat ??= Timer.periodic(const Duration(seconds: 4), (_) => _send());
++  }
++
++  static void disconnected(String peer) {
++    if (_peer != peer) return;
++    _authenticated = false;
++    _heartbeat?.cancel();
++    _heartbeat = null;
++    _send();
++  }
++
++  static void close() {
++    if (_peer != null) disconnected(_peer!);
++    _peer = null;
++  }
++
++  static Future<void> _send() async {
++    try {
++      await _channel.invokeMethod('remoteState', {
++        'peer': _peer ?? '', 'ready': _authenticated,
++        if (_inputState.isNotEmpty) 'inputState': _inputState,
++        if (_gestureState.isNotEmpty) 'gestureState': _gestureState,
++      });
++    } on MissingPluginException {
++      // The upstream desktop builds do not contain our Android host.
++    } on PlatformException {
++      // Missing heartbeats make the native bridge revoke its lease.
++    }
++  }
++}
+--- /dev/null
++++ b/flutter/test/remote_touch_arena_test.dart
+@@ -0,0 +1,63 @@
++import 'package:flutter/gestures.dart';
++import 'package:flutter/widgets.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:flutter_hbb/common/widgets/gestures.dart';
++
++void main() {
++  testWidgets('Remote canvas keeps accepting isolated taps', (tester) async {
++    var taps = 0;
++    var rightClicks = 0;
++    await tester.pumpWidget(Directionality(
++      textDirection: TextDirection.ltr,
++      child: RawGestureDetector(
++        behavior: HitTestBehavior.opaque,
++        gestures: {
++          TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
++            () => TapGestureRecognizer(), (r) => r.onTap = () => taps++),
++          DoubleTapGestureRecognizer: GestureRecognizerFactoryWithHandlers<DoubleTapGestureRecognizer>(
++            () => DoubleTapGestureRecognizer(), (r) => r.onDoubleTap = () {}),
++          LongPressGestureRecognizer: GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
++            () => LongPressGestureRecognizer(), (r) => r.onLongPress = () {}),
++          HoldTapMoveGestureRecognizer: GestureRecognizerFactoryWithHandlers<HoldTapMoveGestureRecognizer>(
++            () => HoldTapMoveGestureRecognizer(), (r) => r.onHoldDragStart = (_) {}),
++          DoubleFinerTapGestureRecognizer: GestureRecognizerFactoryWithHandlers<DoubleFinerTapGestureRecognizer>(
++            () => DoubleFinerTapGestureRecognizer(), (r) => r.onDoubleFinerTap = (_) => rightClicks++),
++          CustomTouchGestureRecognizer: GestureRecognizerFactoryWithHandlers<CustomTouchGestureRecognizer>(
++            () => CustomTouchGestureRecognizer(), (r) => r.onOneFingerPanStart = (_) {}),
++        },
++        child: const SizedBox.expand(),
++      ),
++    ));
++    for (var i = 0; i < 6; i++) {
++      final contact = await tester.startGesture(const Offset(200, 200));
++      await tester.pump(const Duration(milliseconds: 120));
++      await contact.up();
++      await tester.pump(const Duration(milliseconds: 500));
++      expect(taps, i + 1);
++    }
++    expect(rightClicks, 0);
++  });
++
++  testWidgets('Two sequential fingers are not a simultaneous right click', (tester) async {
++    var rightClicks = 0;
++    await tester.pumpWidget(RawGestureDetector(
++      behavior: HitTestBehavior.opaque,
++      gestures: {
++        DoubleFinerTapGestureRecognizer: GestureRecognizerFactoryWithHandlers<DoubleFinerTapGestureRecognizer>(
++          () => DoubleFinerTapGestureRecognizer(), (r) => r.onDoubleFinerTap = (_) => rightClicks++),
++      },
++      child: const SizedBox.expand(),
++    ));
++    await tester.tapAt(const Offset(200, 200));
++    await tester.pump(const Duration(milliseconds: 80));
++    await tester.tapAt(const Offset(250, 200));
++    await tester.pump(const Duration(milliseconds: 400));
++    expect(rightClicks, 0);
++    final first = await tester.startGesture(const Offset(200, 200), pointer: 10);
++    final second = await tester.startGesture(const Offset(250, 200), pointer: 11);
++    await first.up();
++    await second.up();
++    await tester.pump(const Duration(milliseconds: 400));
++    expect(rightClicks, 1);
++  });
++}
+--- /dev/null
++++ b/flutter/test/wangchuan_development_test.dart
+@@ -0,0 +1,58 @@
++import 'package:flutter/services.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:flutter_hbb/mobile/wangchuan_development.dart';
++
++void main() {
++  TestWidgetsFlutterBinding.ensureInitialized();
++  const channel = MethodChannel('wangchuan/development');
++  final messages = <Map<dynamic, dynamic>>[];
++  setUp(() {
++    WangChuanDevelopment.close();
++    messages.clear();
++    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
++        .setMockMethodCallHandler(channel, (call) async {
++      messages.add(call.arguments as Map<dynamic, dynamic>);
++      return null;
++    });
++  });
++  tearDown(() {
++    WangChuanDevelopment.close();
++    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
++        .setMockMethodCallHandler(channel, null);
++  });
++  testWidgets('Opening a page or a different authenticated peer grants nothing', (tester) async {
++    WangChuanDevelopment.open('10.144.77.1:21118');
++    WangChuanDevelopment.authenticated('unrelated-peer');
++    await tester.pump(const Duration(seconds: 8));
++    expect(messages.where((event) => event['ready'] == true), isEmpty);
++    WangChuanDevelopment.authenticated('10.144.77.1:21118');
++    await tester.pump();
++    expect(messages.last['ready'], true);
++    WangChuanDevelopment.disconnected('10.144.77.1:21118');
++    await tester.pump();
++    expect(messages.last['ready'], false);
++    final count = messages.length;
++    await tester.pump(const Duration(seconds: 20));
++    expect(messages.length, count);
++  });
++  testWidgets('Replacing a remote session invalidates the previous session', (tester) async {
++    WangChuanDevelopment.open('first');
++    WangChuanDevelopment.authenticated('first');
++    await tester.pump();
++    WangChuanDevelopment.open('second');
++    await tester.pump();
++    expect(messages.last, {'peer': 'first', 'ready': false});
++    WangChuanDevelopment.authenticated('first');
++    await tester.pump(const Duration(seconds: 12));
++    expect(messages.last['ready'], false);
++  });
++  test('Paired password asks the native host for this peer only', () async {
++    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
++        .setMockMethodCallHandler(channel, (call) async {
++      expect(call.method, 'pairedRemotePassword');
++      return call.arguments['peer'] == '10.144.77.1:21118' ? 'fixture-only' : null;
++    });
++    expect(await WangChuanDevelopment.pairedPassword('10.144.77.1:21118'), 'fixture-only');
++    expect(await WangChuanDevelopment.pairedPassword('unrelated-peer'), isNull);
++  });
++}

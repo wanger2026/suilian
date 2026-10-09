@@ -1,0 +1,55 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'com.google.protobuf' version '0.9.4'
+}
+android {
+    namespace 'com.carriez.flutter_hbb'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'cn.wangchuan.link.test'
+        minSdk 24; targetSdk 35
+        versionCode 42; versionName '0.3.17-test'
+        ndk { abiFilters 'arm64-v8a' }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
+    }
+    kotlinOptions { jvmTarget = '17' }
+    buildTypes { debug { minifyEnabled false }; release { minifyEnabled false } }
+    packaging { resources { excludes += ['/META-INF/*.md', '/META-INF/versions/**/OSGI-INF/MANIFEST.MF'] } }
+}
+protobuf {
+    protoc { artifact = 'com.google.protobuf:protoc:3.20.1' }
+    generateProtoTasks { all().configureEach { task -> task.builtins { java { option 'lite' } } } }
+}
+dependencies {
+    implementation project(':moonlight')
+    implementation 'io.flutter:flutter_embedding_release:1.0.0-a18df97ca57a249df5d8d68cd0820600223ce262'
+    implementation 'com.google.protobuf:protobuf-javalite:3.20.1'
+    implementation 'androidx.media:media:1.6.0'
+    implementation 'com.github.getActivity:XXPermissions:18.5'
+    implementation 'com.caverock:androidsvg-aar:1.4'
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation fileTree(dir: 'libs', include: ['*.aar'])
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20240303'
+    implementation project(':desktop_drop')
+    implementation project(':device_info_plus')
+    implementation project(':file_picker')
+    implementation project(':flutter_keyboard_visibility')
+    implementation project(':flutter_plugin_android_lifecycle')
+    implementation project(':image_picker_android')
+    implementation project(':package_info_plus')
+    implementation project(':path_provider_android')
+    implementation project(':qr_code_scanner')
+    implementation project(':sqflite')
+    implementation project(':uni_links')
+    implementation project(':url_launcher_android')
+    implementation project(':video_player_android')
+    implementation project(':wakelock_plus')
+}

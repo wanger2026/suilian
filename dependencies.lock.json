@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "flutter": "3.24.5",
+  "flutterEngine": "a18df97ca57a249df5d8d68cd0820600223ce262",
+  "frb": "1.80.1",
+  "sources": {
+    "rustdesk": {
+      "url": "https://github.com/rustdesk/rustdesk.git",
+      "commit": "fada664df7a294d1d1a9ca3e7cd3637069122f17"
+    },
+    "flclash": {
+      "url": "https://github.com/chen08209/FlClash.git",
+      "commit": "4b59eca853778d4e7be3de26589252889c899bc5"
+    },
+    "mihomo": {
+      "url": "https://github.com/chen08209/Clash.Meta.git",
+      "commit": "8597778c7df410ebe88c57e59eaab32d203156df"
+    },
+    "moonlight": {
+      "url": "https://github.com/moonlight-stream/moonlight-android.git",
+      "commit": "b48494cb96bff23d8886c4775cc4f39a1075495d"
+    }
+  },
+  "downloads": {
+    "rustdesk.apk": {
+      "url": "https://github.com/rustdesk/rustdesk/releases/download/1.5.0/rustdesk-1.5.0-aarch64-signed.apk",
+      "sha256": "b7910dea1b6ec4a079aa753e0432c2269b843d89d900c7a3930b6ec13f3ba112"
+    },
+    "flclash.apk": {
+      "url": "https://github.com/chen08209/FlClash/releases/download/v0.8.99/FlClash-0.8.99-android-arm64-v8a.apk",
+      "sha256": "6caaa8165fbc43232c3a0184b570852895ffa9d6171cee696e25f11836b1a3f0"
+    },
+    "moonlight.apk": {
+      "url": "https://github.com/moonlight-stream/moonlight-android/releases/download/v12.2/app-nonRoot-release.apk",
+      "sha256": "a871f6190365386ef3ac5722a016d4da015ee1555631ec257f6e5dc3f4a45fe0"
+    },
+    "easytier-windows-2.7.0.zip": {
+      "url": "https://github.com/EasyTier/EasyTier/releases/download/v2.7.0/easytier-windows-x86_64-v2.7.0.zip",
+      "sha256": "790fd9be347b00753570ac2b65f874a591ede9427603fe34e74a86b2b084847f"
+    },
+    "sunshine.zip": {
+      "url": "https://github.com/LizardByte/Sunshine/releases/download/v2026.914.233613/Sunshine-Windows-AMD64-lite.zip",
+      "sha256": "233008e46f4c0e501a586cbfd6c4fd4a4c0d414a0b5fc7f13c070eb92ec3824b"
+    },
+    "rustdesk-windows.exe": {
+      "url": "https://github.com/rustdesk/rustdesk/releases/download/1.5.0/rustdesk-1.5.0-x86_64.exe",
+      "sha256": "8555777215510d83d2d61c9dc984e4fcc838bd7e79f9d18a42585431f5e8bb47"
+    },
+    "rustls-platform-verifier-android-0.1.1.crate": {
+      "url": "https://static.crates.io/crates/rustls-platform-verifier-android/rustls-platform-verifier-android-0.1.1.crate",
+      "sha256": "f87165f0995f63a9fbeea62b64d10b4d9d8e78ec6d7d51fb2125fda7bb36788f"
+    },
+    "mihomo-source.zip": {
+      "url": "https://codeload.github.com/chen08209/Clash.Meta/zip/8597778c7df410ebe88c57e59eaab32d203156df",
+      "sha256": "f245440e47eb14ec4ce079b532f85a0c7015339fc59639cd6fe1ec3d1aa87cf6"
+    },
+    "geosite-private.mrs": {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/private.mrs",
+      "sha256": "0f9ba48d4d0b0d192a4e7c3548486dde05e5a92e6e58e8ea8c9cc302712a1420"
+    },
+    "geosite-cn.mrs": {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/cn.mrs",
+      "sha256": "2f7ccaf6ac344b22f2d3751ffcdd1e102f6cd698fb526c4c3eb4c0797505d75f"
+    },
+    "geoip-cn.mrs": {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geoip/cn.mrs",
+      "sha256": "d95b3d125f6c74ce3c15e19ef794f142de91e21c3b8fb7767e76aebfabff5149"
+    },
+    "geosite-geolocation-!cn.mrs": {
+      "url": "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/32bbb6c45c63a491c571f98cd9d863d7fd6771dc/geo/geosite/geolocation-!cn.mrs",
+      "sha256": "8da9147ed5a502bc48a75e983c00846a909fd2f9332eb829032e3271517d0222"
+    }
+  },
+  "rulesCommit": "32bbb6c45c63a491c571f98cd9d863d7fd6771dc",
+  "rules": [
+    {
+      "download": "geosite-private.mrs",
+      "label": "私有域名",
+      "group": "局域网",
+      "target": "DIRECT",
+      "behavior": "domain"
+    },
+    {
+      "download": "geosite-cn.mrs",
+      "label": "国内域名",
+      "group": "国内",
+      "target": "DIRECT",
+      "behavior": "domain"
+    },
+    {
+      "download": "geoip-cn.mrs",
+      "label": "国内 IP",
+      "group": "国内",
+      "target": "DIRECT",
+      "behavior": "ipcidr"
+    },
+    {
+      "download": "geosite-geolocation-!cn.mrs",
+      "label": "非国内域名",
+      "group": "国外",
+      "target": "COMPUTER",
+      "behavior": "domain"
+    }
+  ]
+}

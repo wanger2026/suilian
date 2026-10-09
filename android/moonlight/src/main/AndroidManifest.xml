@@ -1,0 +1,87 @@
+<?xml version='1.0' encoding='utf-8'?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CAPTURE_KEYBOARD" />
+    <uses-permission android:name="com.android.providers.tv.permission.READ_EPG_DATA" />
+    <uses-permission android:name="com.android.providers.tv.permission.WRITE_EPG_DATA" />
+
+    
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" android:maxSdkVersion="33" />
+
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
+
+    
+    <uses-feature android:name="android.hardware.type.pc" android:required="false" />
+
+    <application>
+
+        <provider android:name="com.limelight.PosterContentProvider" android:authorities="poster.${applicationId}" android:enabled="true" android:exported="false">
+        </provider>
+
+        
+        <uses-library android:name="com.sec.android.app.multiwindow" android:required="false" />
+        <meta-data android:name="com.sec.android.support.multiwindow" android:value="true" />
+
+        
+        <meta-data android:name="com.android.graphics.intervention.wm.allowDownscale" android:value="false" />
+        
+        
+        <meta-data android:name="android.game_mode_config" android:resource="@xml/game_mode_config" />
+
+        
+
+        <activity android:name="com.limelight.PcView" android:exported="false" android:resizeableActivity="true" android:enableOnBackInvokedCallback="true" android:configChanges="mcc|mnc|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection">
+
+            <meta-data android:name="WindowManagerPreference:FreeformWindowSize" android:value="system-default" />
+            <meta-data android:name="WindowManagerPreference:FreeformWindowOrientation" android:value="landscape" />
+
+            </activity>
+        
+        <activity android:name="com.limelight.ShortcutTrampoline" android:noHistory="true" android:exported="false" android:resizeableActivity="true" android:enableOnBackInvokedCallback="true" android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection">
+            <meta-data android:name="WindowManagerPreference:FreeformWindowSize" android:value="system-default" />
+            <meta-data android:name="WindowManagerPreference:FreeformWindowOrientation" android:value="landscape" />
+        </activity>
+        <activity android:name="com.limelight.AppView" android:resizeableActivity="true" android:enableOnBackInvokedCallback="true" android:configChanges="mcc|mnc|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection" android:exported="false">
+            <meta-data android:name="WindowManagerPreference:FreeformWindowSize" android:value="system-default" />
+            <meta-data android:name="WindowManagerPreference:FreeformWindowOrientation" android:value="landscape" />
+        </activity>
+        <activity android:name="com.limelight.preferences.StreamSettings" android:resizeableActivity="true" android:enableOnBackInvokedCallback="true" android:configChanges="mcc|mnc|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection" android:label="Streaming Settings" android:exported="false">
+            <meta-data android:name="WindowManagerPreference:FreeformWindowSize" android:value="system-default" />
+            <meta-data android:name="WindowManagerPreference:FreeformWindowOrientation" android:value="landscape" />
+        </activity>
+        <activity android:name="com.limelight.preferences.AddComputerManually" android:resizeableActivity="true" android:windowSoftInputMode="stateVisible" android:enableOnBackInvokedCallback="true" android:configChanges="mcc|mnc|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection" android:label="Add Computer Manually" android:exported="false">
+            <meta-data android:name="WindowManagerPreference:FreeformWindowSize" android:value="system-default" />
+            <meta-data android:name="WindowManagerPreference:FreeformWindowOrientation" android:value="landscape" />
+        </activity>
+        <activity android:name="com.limelight.Game" android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection" android:noHistory="true" android:supportsPictureInPicture="true" android:resizeableActivity="true" android:enableOnBackInvokedCallback="false" android:launchMode="singleTask" android:excludeFromRecents="true" android:theme="@style/StreamTheme" android:preferMinimalPostProcessing="true" android:exported="false">
+
+            <meta-data android:name="WindowManagerPreference:FreeformWindowSize" android:value="system-default" />
+            <meta-data android:name="WindowManagerPreference:FreeformWindowOrientation" android:value="landscape" />
+
+            
+            <meta-data android:name="com.nvidia.immediateInput" android:value="true" />
+            <meta-data android:name="com.nvidia.rawCursorInput" android:value="true" />
+        </activity>
+
+        <service android:name="com.limelight.discovery.DiscoveryService" android:label="mDNS PC Auto-Discovery Service" android:exported="false" />
+        <service android:name="com.limelight.computers.ComputerManagerService" android:label="Computer Management Service" android:exported="false" />
+        <service android:name="com.limelight.binding.input.driver.UsbDriverService" android:label="Usb Driver Service" android:exported="false" />
+
+        <activity android:name="com.limelight.HelpActivity" android:resizeableActivity="true" android:enableOnBackInvokedCallback="true" android:configChanges="mcc|mnc|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|screenSize|smallestScreenSize|layoutDirection" android:exported="false">
+            <meta-data android:name="WindowManagerPreference:FreeformWindowSize" android:value="system-default" />
+            <meta-data android:name="WindowManagerPreference:FreeformWindowOrientation" android:value="landscape" />
+        </activity>
+    </application>
+
+</manifest>

@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Only SHA-256 asset hashes for third-party authentication SVG icons"
+condition = "AND"
+paths = ['''(^|/)(native-artifacts|integrated-ui)\.lock\.json$''']
+regexTarget = "line"
+regexes = ['''"assets/flutter_assets/assets/auth-[a-z0-9-]+\.svg": "[0-9a-f]{64}"''']
+

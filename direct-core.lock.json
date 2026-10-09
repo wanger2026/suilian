@@ -1,0 +1,11 @@
+{
+  "flclash": "4b59eca853778d4e7be3de26589252889c899bc5",
+  "mihomo": "8597778c7df410ebe88c57e59eaab32d203156df",
+  "patch": "p2p_only + physical network snapshot + drain unmatched packet sink",
+  "sourceArchiveSha256": "f245440e47eb14ec4ce079b532f85a0c7015339fc59639cd6fe1ec3d1aa87cf6",
+  "files": {
+    "lib/arm64-v8a/libclash.so": "96ba498cae1981eb86a3bb002db890620feb77fc0d90bea34d6f9360cbbe65a5"
+  },
+  "minimumLoadAlignment": 16384,
+  "policy": "p2p_only forced true before every EasyTier instance creation"
+}

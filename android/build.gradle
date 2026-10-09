@@ -1,0 +1,26 @@
+allprojects {
+    repositories {
+        google(); mavenCentral()
+        maven { url 'https://storage.googleapis.com/download.flutter.io' }
+        maven { url 'https://jitpack.io' }
+    }
+}
+subprojects { p ->
+    if (p.name != 'app' && p.name != 'moonlight') {
+        p.plugins.withId('com.android.library') {
+            p.android.compileSdk = 36
+            if (!p.android.namespace) {
+                def mf = p.file('src/main/AndroidManifest.xml')
+                if (mf.exists()) { p.android.namespace = new XmlSlurper().parse(mf).@package.text() }
+            }
+            p.dependencies.add('compileOnly', 'io.flutter:flutter_embedding_release:1.0.0-a18df97ca57a249df5d8d68cd0820600223ce262')
+            p.dependencies.add('implementation', 'androidx.lifecycle:lifecycle-common-java8:2.7.0')
+        }
+    }
+}
+
+project(':file_picker').plugins.withId('com.android.library') { project(':file_picker').dependencies.add('implementation', project(':flutter_plugin_android_lifecycle')) }
+
+project(':image_picker_android').plugins.withId('com.android.library') { project(':image_picker_android').dependencies.add('implementation', project(':flutter_plugin_android_lifecycle')) }
+
+project(':wakelock_plus').plugins.withId('com.android.library') { project(':wakelock_plus').dependencies.add('implementation', project(':package_info_plus')) }

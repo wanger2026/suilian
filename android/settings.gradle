@@ -1,0 +1,16 @@
+pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+plugins {
+    id 'com.android.application' version '8.10.1' apply false
+    id 'com.android.library' version '8.10.1' apply false
+    id 'org.jetbrains.kotlin.android' version '2.1.21' apply false
+}
+include ':app', ':moonlight'
+def localPlugins = file('plugins.local.json')
+if (!localPlugins.exists()) {
+    throw new GradleException('Run python tools/build.py remote first. The generated plugin paths are local and must not be committed.')
+}
+def resolved = new groovy.json.JsonSlurper().parse(localPlugins)
+resolved.plugins.android.findAll { it.get('native_build', true) }.each { plugin ->
+    include ":${plugin.name}"
+    project(":${plugin.name}").projectDir = new File(plugin.path, 'android')
+}
